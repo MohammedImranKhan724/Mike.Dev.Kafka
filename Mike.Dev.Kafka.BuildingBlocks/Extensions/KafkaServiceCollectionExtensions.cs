@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Mike.Dev.Kafka.BuildingBlocks.Kafka.Consumer;
 using Mike.Dev.Kafka.BuildingBlocks.Kafka.Producer;
 using Mike.Dev.Kafka.BuildingBlocks.Kafka.Serialization;
+using Mike.Dev.Kafka.BuildingBlocks.Kafka.Transaction;
+using Mike.Dev.Kafka.Contracts.Events;
 
 namespace Mike.Dev.Kafka.BuildingBlocks.Extensions;
 
@@ -63,6 +65,35 @@ public static class KafkaServiceCollectionExtensions
         services.AddSingleton(
             typeof(IKafkaConsumer<,>),
             typeof(KafkaConsumer<,>));
+
+        return services;
+    }
+
+    public static IServiceCollection AddKafkaTransactionalProducer(
+         this IServiceCollection services,
+         IConfiguration configuration)
+    {
+        services
+      .AddOptions<KafkaTransactionalProducerOptions>()
+      .Bind(
+          configuration.GetSection(
+              KafkaTransactionalProducerOptions.Section))
+      .ValidateDataAnnotations()
+      .ValidateOnStart();
+
+        services.AddSingleton<
+     ISerializer<string>,
+     KafkaStringSerializer>();
+
+        services.AddSingleton<
+            ISerializer<DeviceEvent>,
+            KafkaJsonSerializer<DeviceEvent>>();
+
+        services.AddSingleton(
+            typeof(
+                IKafkaTransactionalProducer<,>),
+            typeof(
+                KafkaTransactionalProducer<,>));
 
         return services;
     }

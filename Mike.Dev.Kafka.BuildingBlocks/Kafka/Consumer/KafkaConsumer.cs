@@ -1,7 +1,6 @@
 ﻿using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Mike.Dev.Kafka.BuildingBlocks.Kafka.Producer;
 
 namespace Mike.Dev.Kafka.BuildingBlocks.Kafka.Consumer;
 
@@ -47,6 +46,8 @@ public sealed class KafkaConsumer<TKey, TValue> : IKafkaConsumer<TKey, TValue>, 
 
             MaxPollRecords =
                 settings.MaxPollRecords,
+
+            IsolationLevel = ParseIsolationLevel(settings.IsolationLevel),
 
             PartitionAssignmentStrategy = ParsePartitionAssignmentStrategy(settings.PartitionAssignmentStrategy),
         };
@@ -110,49 +111,27 @@ public sealed class KafkaConsumer<TKey, TValue> : IKafkaConsumer<TKey, TValue>, 
                         RawResult =
                             result
                     };
+
                 var status = await handler(
                     message,
                     cancellationToken);
 
-                switch (status)
-                {
-                    case KafkaProcessingStatus.Success:
-                    case KafkaProcessingStatus.DeadLetter:
+                // Offset commit is the handler's responsibility: a
+                // transactional handler commits via SendOffsetsToTransaction,
+                // others call Commit(message) explicitly (e.g. after a DLT
+                // publish). Auto-committing here would be unsafe for
+                // transactional handlers if their transaction was aborted.
 
-                        _consumer.Commit(result);
-
-                        _logger.LogDebug(
-                            "Kafka message committed. " +
-                            "Topic={Topic}, " +
-                            "Partition={Partition}, " +
-                            "Offset={Offset}, " +
-                            "Status={Status}",
-                            result.Topic,
-                            result.Partition,
-                            result.Offset,
-                            status);
-
-                        break;
-
-                    case KafkaProcessingStatus.Retry:
-
-                        _logger.LogWarning(
-                            "Kafka message was not committed. " +
-                            "Message will be redelivered. " +
-                            "Topic={Topic}, " +
-                            "Partition={Partition}, " +
-                            "Offset={Offset}",
-                            result.Topic,
-                            result.Partition,
-                            result.Offset);
-
-                        break;
-
-                    default:
-
-                        throw new InvalidOperationException(
-                            $"Unknown Kafka processing status: {status}");
-                }
+                _logger.LogDebug(
+                    "Kafka message processing completed. " +
+                    "Topic={Topic}, " +
+                    "Partition={Partition}, " +
+                    "Offset={Offset}, " +
+                    "Status={Status}",
+                    message.Topic,
+                    message.Partition,
+                    message.Offset,
+                    status);
             }
             catch (OperationCanceledException)
                 when (cancellationToken.IsCancellationRequested)
@@ -176,6 +155,35 @@ public sealed class KafkaConsumer<TKey, TValue> : IKafkaConsumer<TKey, TValue>, 
                     "the message will be redelivered.");
             }
         }
+    }
+
+    public IConsumerGroupMetadata GetGroupMetadata()
+    {
+        return _consumer.ConsumerGroupMetadata;
+    }
+
+    public void Commit(
+        KafkaConsumedMessage<TKey, TValue> message)
+    {
+        var offset =
+            message.NextOffset;
+
+        _consumer.Commit(
+            new[]
+            {
+                offset
+            });
+
+        _logger.LogDebug(
+            "Kafka offset committed. " +
+            "Topic={Topic}, " +
+            "Partition={Partition}, " +
+            "ProcessedOffset={ProcessedOffset}, " +
+            "NextOffset={NextOffset}",
+            message.Topic,
+            message.Partition,
+            message.Offset,
+            offset.Offset);
     }
 
     private void OnError(IConsumer<TKey, TValue> consumer, Error error)
@@ -211,6 +219,21 @@ public sealed class KafkaConsumer<TKey, TValue> : IKafkaConsumer<TKey, TValue>, 
         _logger.LogWarning(
             "Kafka partitions lost (session expired before graceful revoke): {Partitions}",
             string.Join(", ", partitions));
+    }
+
+    private static IsolationLevel ParseIsolationLevel(string value)
+    {
+        return value.ToLowerInvariant() switch
+        {
+            "readcommitted" =>
+                IsolationLevel.ReadCommitted,
+
+            "readuncommitted" =>
+                IsolationLevel.ReadUncommitted,
+
+            _ => throw new InvalidOperationException(
+                $"Invalid Kafka IsolationLevel: {value}")
+        };
     }
 
     private static AutoOffsetReset ParseAutoOffsetReset(

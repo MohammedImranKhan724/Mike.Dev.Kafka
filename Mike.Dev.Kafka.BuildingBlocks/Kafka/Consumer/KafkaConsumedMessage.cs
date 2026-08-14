@@ -10,11 +10,19 @@ public sealed class KafkaConsumedMessage<TKey, TValue>
 
     public required Offset Offset { get; init; }
 
-    public TKey? Key { get; init; }
+    public required TKey Key { get; init; }
 
     public required TValue Value { get; init; }
 
     public Headers? Headers { get; init; }
 
     public required ConsumeResult<TKey, TValue> RawResult { get; init; }
+
+    public TopicPartition TopicPartition =>
+        new(Topic, Partition);
+
+    public TopicPartitionOffset NextOffset =>
+        new(
+            TopicPartition,
+            Offset + 1);
 }

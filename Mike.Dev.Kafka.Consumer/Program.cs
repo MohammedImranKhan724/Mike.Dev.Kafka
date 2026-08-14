@@ -21,6 +21,8 @@ builder.Services.AddSingleton<
     IProcessedEventStore,
     InMemoryProcessedEventStore>();
 
+builder.Services.AddSingleton<DeviceEventTransactionalProcessor>();
+
 
 // Retry
 builder.Services

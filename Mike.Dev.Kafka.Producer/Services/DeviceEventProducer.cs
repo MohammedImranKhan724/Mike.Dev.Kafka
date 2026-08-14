@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Options;
+using Mike.Dev.Kafka.BuildingBlocks.Kafka;
 using Mike.Dev.Kafka.BuildingBlocks.Kafka.Producer;
 using Mike.Dev.Kafka.Contracts.Events;
 

@@ -1,36 +1,54 @@
-﻿using Mike.Dev.Kafka.BuildingBlocks.Kafka.Consumer;
+﻿using Mike.Dev.Kafka.BuildingBlocks;
+using Mike.Dev.Kafka.BuildingBlocks.Kafka.Consumer;
 using Mike.Dev.Kafka.BuildingBlocks.Kafka.DeadLetter;
 using Mike.Dev.Kafka.BuildingBlocks.Kafka.Exceptions;
-using Mike.Dev.Kafka.BuildingBlocks.Kafka.Producer;
 using Mike.Dev.Kafka.BuildingBlocks.Kafka.Retry;
 using Mike.Dev.Kafka.Consumer.Handlers;
 using Mike.Dev.Kafka.Contracts.Events;
 
 namespace Mike.Dev.Kafka.Consumer.Services;
 
-public sealed class DeviceEventConsumer : BackgroundService
+public sealed class DeviceEventConsumer
+    : BackgroundService
 {
-    private readonly IKafkaConsumer<string, DeviceEvent> _consumer;
+    private readonly
+        IKafkaConsumer<string, DeviceEvent>
+        _consumer;
 
-    private readonly IKafkaMessageHandler<string, DeviceEvent> _handler;
+    private readonly
+        IKafkaMessageHandler<string, DeviceEvent>
+        _handler;
 
-    private readonly KafkaRetryExecutor _retryExecutor;
+    private readonly
+        KafkaRetryExecutor
+        _retryExecutor;
 
-    private readonly KafkaDeadLetterProducer<string, DeviceEvent> _dltProducer;
+    private readonly
+        KafkaDeadLetterProducer<string, DeviceEvent>
+        _dltProducer;
 
-    private readonly ILogger<DeviceEventConsumer> _logger;
+    private readonly
+        DeviceEventTransactionalProcessor
+        _transactionalProcessor;
+
+    private readonly
+        ILogger<DeviceEventConsumer>
+        _logger;
 
     public DeviceEventConsumer(
         IKafkaConsumer<string, DeviceEvent> consumer,
         IKafkaMessageHandler<string, DeviceEvent> handler,
         KafkaRetryExecutor retryExecutor,
         KafkaDeadLetterProducer<string, DeviceEvent> dltProducer,
+        DeviceEventTransactionalProcessor transactionalProcessor,
         ILogger<DeviceEventConsumer> logger)
     {
         _consumer = consumer;
         _handler = handler;
         _retryExecutor = retryExecutor;
         _dltProducer = dltProducer;
+        _transactionalProcessor =
+            transactionalProcessor;
         _logger = logger;
     }
 
@@ -48,25 +66,43 @@ public sealed class DeviceEventConsumer : BackgroundService
             "Device event consumer stopped.");
     }
 
-    private async Task<KafkaProcessingStatus> ProcessMessageAsync(
-    KafkaConsumedMessage<string, DeviceEvent> message,
-    CancellationToken cancellationToken)
+    private async Task<KafkaProcessingStatus>
+        ProcessMessageAsync(
+            KafkaConsumedMessage<string, DeviceEvent> message,
+            CancellationToken cancellationToken)
     {
         try
         {
             await _retryExecutor.ExecuteAsync(
-                ct => _handler.HandleAsync(
-                    message,
-                    ct),
+                async ct =>
+                {
+                    await _handler.HandleAsync(
+                        message,
+                        ct);
+
+                    var groupMetadata =
+                        _consumer.GetGroupMetadata();
+
+                    await _transactionalProcessor.ProcessAsync(
+                        message,
+                        groupMetadata,
+                        ct);
+                },
                 cancellationToken);
 
             _logger.LogInformation(
-                "Kafka message processed successfully. " +
-                "Topic={Topic}, Partition={Partition}, Offset={Offset}",
+                "Kafka message processed. " +
+                "Topic={Topic}, " +
+                "Partition={Partition}, " +
+                "Offset={Offset}",
                 message.Topic,
                 message.Partition,
                 message.Offset);
 
+            // Offset commit already happened inside the transactional
+            // producer via SendOffsetsToTransaction — do not also call
+            // _consumer.Commit() here, it would be redundant and unsafe
+            // if the transaction had in fact been aborted.
             return KafkaProcessingStatus.Success;
         }
         catch (OperationCanceledException)
@@ -79,16 +115,46 @@ public sealed class DeviceEventConsumer : BackgroundService
         }
         catch (KafkaRetryExhaustedException ex)
         {
-            var exception =
-                ex.InnerException ?? ex;
-
-            await PublishToDeadLetterAsync(
+            return await DeadLetterAsync(
                 message,
-                exception,
+                ex.InnerException ?? ex,
                 cancellationToken);
-
-            return KafkaProcessingStatus.DeadLetter;
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Kafka message processing failed with a " +
+                "non-retryable error. " +
+                "Topic={Topic}, " +
+                "Partition={Partition}, " +
+                "Offset={Offset}",
+                message.Topic,
+                message.Partition,
+                message.Offset);
+
+            return await DeadLetterAsync(
+                message,
+                ex,
+                cancellationToken);
+        }
+    }
+
+    private async Task<KafkaProcessingStatus> DeadLetterAsync(
+        KafkaConsumedMessage<string, DeviceEvent> message,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        await PublishToDeadLetterAsync(
+            message,
+            exception,
+            cancellationToken);
+
+        // Publishing to the DLT stands in for successful processing of
+        // this message — commit past it so it is not redelivered forever.
+        _consumer.Commit(message);
+
+        return KafkaProcessingStatus.DeadLetter;
     }
 
     private async Task PublishToDeadLetterAsync(
@@ -98,8 +164,7 @@ public sealed class DeviceEventConsumer : BackgroundService
     {
         _logger.LogError(
             exception,
-            "Kafka message processing failed. " +
-            "Publishing to DLT. " +
+            "Publishing Kafka message to DLT. " +
             "Topic={Topic}, " +
             "Partition={Partition}, " +
             "Offset={Offset}",

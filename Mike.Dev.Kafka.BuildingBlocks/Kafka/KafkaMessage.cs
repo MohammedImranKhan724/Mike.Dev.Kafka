@@ -1,4 +1,4 @@
-﻿namespace Mike.Dev.Kafka.BuildingBlocks.Kafka.Producer;
+﻿namespace Mike.Dev.Kafka.BuildingBlocks.Kafka;
 
 public sealed class KafkaMessage<TKey, TValue>
 {

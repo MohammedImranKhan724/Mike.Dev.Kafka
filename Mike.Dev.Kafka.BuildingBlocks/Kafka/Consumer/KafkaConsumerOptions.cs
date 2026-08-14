@@ -31,4 +31,6 @@ public sealed class KafkaConsumerOptions
     public int MaxPollRecords { get; set; } = 500;
 
     public string PartitionAssignmentStrategy { get; set; } = "CooperativeSticky";
+
+    public string IsolationLevel { get; set; } = "ReadCommitted";
 }

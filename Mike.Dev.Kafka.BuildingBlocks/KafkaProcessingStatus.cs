@@ -1,4 +1,4 @@
-﻿namespace Mike.Dev.Kafka.BuildingBlocks.Kafka.Producer;
+﻿namespace Mike.Dev.Kafka.BuildingBlocks;
 
 public enum KafkaProcessingStatus
 {

@@ -7,17 +7,24 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Workers\**" />
+    <Content Remove="Workers\**" />
+    <EmbeddedResource Remove="Workers\**" />
+    <None Remove="Workers\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EFCore.NamingConventions" Version="8.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Mike.Dev.Kafka.BuildingBlocks\Mike.Dev.Kafka.BuildingBlocks.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Configuration\" />
-    <Folder Include="Handlers\" />
-    <Folder Include="Workers\" />
   </ItemGroup>
 
 </Project>
