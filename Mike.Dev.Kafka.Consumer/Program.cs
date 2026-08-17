@@ -8,23 +8,21 @@ using Mike.Dev.Kafka.Contracts.Events;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// Kafka
 builder.Services.AddKafkaConsumer(
     builder.Configuration);
 
 builder.Services.AddKafkaProducer(
     builder.Configuration);
 
+builder.Services.AddKafkaTransactionalProducer(
+    builder.Configuration);
 
-// Idempotency
 builder.Services.AddSingleton<
     IProcessedEventStore,
     InMemoryProcessedEventStore>();
 
 builder.Services.AddSingleton<DeviceEventTransactionalProcessor>();
 
-
-// Retry
 builder.Services
     .AddOptions<KafkaRetryOptions>()
     .Bind(
@@ -40,8 +38,8 @@ builder.Services
 builder.Services.AddSingleton<KafkaRetryPolicy>();
 builder.Services.AddSingleton<KafkaRetryExecutor>();
 
+builder.Services.AddKafkaSchemaRegistry(builder.Configuration);
 
-// DLT
 builder.Services
     .AddOptions<KafkaDeadLetterOptions>()
     .Bind(
@@ -57,16 +55,11 @@ builder.Services
 builder.Services.AddSingleton(
     typeof(KafkaDeadLetterProducer<,>));
 
-
-// Handler
 builder.Services.AddSingleton<
     IKafkaMessageHandler<string, DeviceEvent>,
     DeviceEventHandler>();
 
-
-// Background consumer
 builder.Services.AddHostedService<DeviceEventConsumer>();
-
 
 var host = builder.Build();
 

@@ -15,7 +15,7 @@ public sealed class KafkaProducer<TKey, TValue>
     public KafkaProducer(
         IOptions<KafkaProducerOptions> options,
         ISerializer<TKey> keySerializer,
-        ISerializer<TValue> valueSerializer,
+         IAsyncSerializer<TValue> valueSerializer,
         ILogger<KafkaProducer<TKey, TValue>> logger)
     {
         _logger = logger;

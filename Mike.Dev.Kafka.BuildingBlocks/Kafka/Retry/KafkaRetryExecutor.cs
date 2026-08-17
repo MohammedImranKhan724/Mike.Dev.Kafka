@@ -50,8 +50,6 @@ public sealed class KafkaRetryExecutor
             {
                 lastException = ex;
 
-                // Important:
-                // Do not retry exceptions that are not transient.
                 if (!_retryPolicy.ShouldRetry(ex))
                 {
                     _logger.LogError(

@@ -20,6 +20,9 @@ public sealed class KafkaOutboxDispatcher
 
     private readonly KafkaOutboxDispatcherOptions _options;
 
+    private static readonly JsonSerializerOptions JsonOptions =
+        new(JsonSerializerDefaults.Web);
+
     public KafkaOutboxDispatcher(
         IServiceScopeFactory scopeFactory,
         IKafkaProducer<string, DeviceEvent> producer,
@@ -114,7 +117,8 @@ public sealed class KafkaOutboxDispatcher
         {
             var value =
                 JsonSerializer.Deserialize<DeviceEvent>(
-                    message.Payload);
+                    message.Payload,
+                    JsonOptions);
 
             if (value is null)
             {

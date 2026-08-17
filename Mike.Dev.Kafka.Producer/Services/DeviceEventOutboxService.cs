@@ -45,10 +45,6 @@ public sealed class DeviceEventOutboxService
 
         try
         {
-            // Business-specific database writes belong here, inside the
-            // same transaction as the outbox insert below, so both commit
-            // or roll back together.
-
             await _repository.AddAsync(
                 outboxMessage,
                 cancellationToken);

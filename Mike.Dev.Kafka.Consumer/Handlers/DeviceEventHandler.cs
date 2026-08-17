@@ -56,7 +56,6 @@ public sealed class DeviceEventHandler
             deviceEvent.DeviceId,
             deviceEvent.EventType);
 
-        // Simulate processing failure
         if (deviceEvent.DeviceId == 5)
         {
             throw new InvalidOperationException(

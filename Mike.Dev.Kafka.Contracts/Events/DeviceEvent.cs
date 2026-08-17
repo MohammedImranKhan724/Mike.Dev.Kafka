@@ -13,4 +13,6 @@ public sealed record DeviceEvent
     public required string Message { get; init; }
 
     public DateTime TimestampUtc { get; init; }
+
+    public string? Severity { get; init; }
 }

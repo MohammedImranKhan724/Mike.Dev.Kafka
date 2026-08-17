@@ -39,7 +39,6 @@ public sealed class DeviceEventTransactionalProcessor
         var input =
             message.Value;
 
-        // Business transformation
         var output =
             new DeviceEvent
             {
@@ -94,8 +93,6 @@ public sealed class DeviceEventTransactionalProcessor
                     }
             };
 
-        // IMPORTANT:
-        // Commit the NEXT offset.
         var offsetToCommit =
             message.NextOffset;
 

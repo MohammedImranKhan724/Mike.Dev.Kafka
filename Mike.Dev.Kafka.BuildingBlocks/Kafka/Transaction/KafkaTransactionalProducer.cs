@@ -22,7 +22,7 @@ public sealed class KafkaTransactionalProducer<TKey, TValue>
     public KafkaTransactionalProducer(
         IOptions<KafkaTransactionalProducerOptions> options,
         ISerializer<TKey> keySerializer,
-        ISerializer<TValue> valueSerializer,
+         IAsyncSerializer<TValue> valueSerializer,
         ILogger<KafkaTransactionalProducer<TKey, TValue>> logger)
     {
         _options = options.Value;
@@ -72,7 +72,7 @@ public sealed class KafkaTransactionalProducer<TKey, TValue>
     {
         return ExecuteInTransactionAsync(
             produceMessages: () =>
-                ProduceOne(message),
+                ProduceOneAsync(message),
 
             offsetsToCommit:
                 offsetsToCommit,
@@ -95,11 +95,11 @@ public sealed class KafkaTransactionalProducer<TKey, TValue>
             messages.ToList();
 
         return ExecuteInTransactionAsync(
-            produceMessages: () =>
+            produceMessages: async () =>
             {
                 foreach (var message in messageList)
                 {
-                    ProduceOne(message);
+                    await ProduceOneAsync(message);
                 }
             },
 
@@ -120,10 +120,10 @@ public sealed class KafkaTransactionalProducer<TKey, TValue>
                 cancellationToken);
     }
 
-    private void ProduceOne(
+    private async Task ProduceOneAsync(
         KafkaMessage<TKey, TValue> message)
     {
-        _producer.Produce(
+        await _producer.ProduceAsync(
             message.Topic,
             new Message<TKey, TValue>
             {
@@ -137,7 +137,7 @@ public sealed class KafkaTransactionalProducer<TKey, TValue>
     }
 
     private async Task ExecuteInTransactionAsync(
-        Action produceMessages,
+        Func<Task> produceMessages,
         IEnumerable<TopicPartitionOffset>?
             offsetsToCommit,
         IConsumerGroupMetadata?
@@ -160,7 +160,7 @@ public sealed class KafkaTransactionalProducer<TKey, TValue>
                 {
                     _producer.BeginTransaction();
 
-                    produceMessages();
+                    await produceMessages();
 
                     if (offsetsToCommit is not null &&
                         consumerGroupMetadata is not null)
@@ -243,11 +243,7 @@ public sealed class KafkaTransactionalProducer<TKey, TValue>
             return;
         }
 
-        if (exception is KafkaTxnRequiresAbortException)
-        {
-            AbortTransaction(logContext);
-            return;
-        }
+        AbortTransaction(logContext);
 
         _logger.LogError(
             exception,

@@ -116,12 +116,6 @@ public sealed class KafkaConsumer<TKey, TValue> : IKafkaConsumer<TKey, TValue>, 
                     message,
                     cancellationToken);
 
-                // Offset commit is the handler's responsibility: a
-                // transactional handler commits via SendOffsetsToTransaction,
-                // others call Commit(message) explicitly (e.g. after a DLT
-                // publish). Auto-committing here would be unsafe for
-                // transactional handlers if their transaction was aborted.
-
                 _logger.LogDebug(
                     "Kafka message processing completed. " +
                     "Topic={Topic}, " +
@@ -200,18 +194,13 @@ public sealed class KafkaConsumer<TKey, TValue> : IKafkaConsumer<TKey, TValue>, 
         _logger.LogInformation("Kafka partitions assigned: {Partitions}", string.Join(", ", partitions));
     }
 
-    private void OnPartitionsRevoked(IConsumer<TKey, TValue> consumer, List<TopicPartitionOffset> partitions)
+    private void OnPartitionsRevoked(
+      IConsumer<TKey, TValue> consumer,
+      List<TopicPartitionOffset> partitions)
     {
-        _logger.LogInformation("Kafka partitions revoked: {Partitions}", string.Join(", ", partitions));
-
-        try
-        {
-            consumer.Commit();
-        }
-        catch (KafkaException ex)
-        {
-            _logger.LogWarning(ex, "Failed to commit offsets during partition revoke.");
-        }
+        _logger.LogInformation(
+            "Kafka partitions revoked: {Partitions}",
+            string.Join(", ", partitions));
     }
 
     private void OnPartitionsLost(IConsumer<TKey, TValue> consumer, List<TopicPartitionOffset> partitions)

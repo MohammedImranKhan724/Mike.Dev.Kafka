@@ -1,8 +1,12 @@
 ﻿using Confluent.Kafka;
+using Confluent.Kafka.SyncOverAsync;
+using Confluent.SchemaRegistry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Mike.Dev.Kafka.BuildingBlocks.Kafka.Consumer;
 using Mike.Dev.Kafka.BuildingBlocks.Kafka.Producer;
+using Mike.Dev.Kafka.BuildingBlocks.Kafka.SchemaRegistry;
 using Mike.Dev.Kafka.BuildingBlocks.Kafka.Serialization;
 using Mike.Dev.Kafka.BuildingBlocks.Kafka.Transaction;
 using Mike.Dev.Kafka.Contracts.Events;
@@ -23,16 +27,13 @@ public static class KafkaServiceCollectionExtensions
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
-        // Generic JSON serializer for all types
         services.AddSingleton(
-            typeof(ISerializer<>),
-            typeof(KafkaJsonSerializer<>));
+            typeof(IAsyncSerializer<>),
+            typeof(KafkaAsyncSerializerAdapter<>));
 
-        // String should use UTF-8
         services.AddSingleton<ISerializer<string>>(
             Serializers.Utf8);
 
-        // Kafka producer
         services.AddSingleton(
             typeof(IKafkaProducer<,>),
             typeof(KafkaProducer<,>));
@@ -51,17 +52,13 @@ public static class KafkaServiceCollectionExtensions
                     KafkaConsumerOptions.Section))
             .ValidateDataAnnotations()
             .ValidateOnStart();
-
-        // Generic JSON deserializer
         services.AddSingleton(
             typeof(IDeserializer<>),
             typeof(KafkaJsonDeserializer<>));
 
-        // String should use UTF-8
         services.AddSingleton<IDeserializer<string>>(
             Deserializers.Utf8);
 
-        // Kafka consumer
         services.AddSingleton(
             typeof(IKafkaConsumer<,>),
             typeof(KafkaConsumer<,>));
@@ -85,15 +82,53 @@ public static class KafkaServiceCollectionExtensions
      ISerializer<string>,
      KafkaStringSerializer>();
 
-        services.AddSingleton<
-            ISerializer<DeviceEvent>,
-            KafkaJsonSerializer<DeviceEvent>>();
-
         services.AddSingleton(
             typeof(
                 IKafkaTransactionalProducer<,>),
             typeof(
                 KafkaTransactionalProducer<,>));
+
+        return services;
+    }
+
+    public static IServiceCollection AddKafkaSchemaRegistry(
+     this IServiceCollection services,
+     IConfiguration configuration)
+    {
+        services
+            .AddOptions<KafkaSchemaRegistryOptions>()
+            .Bind(configuration.GetSection(
+                KafkaSchemaRegistryOptions.Section))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddSingleton<ISchemaRegistryClient>(sp =>
+        {
+            var options =
+                sp.GetRequiredService<
+                    IOptions<KafkaSchemaRegistryOptions>>()
+                .Value;
+
+            var config = new SchemaRegistryConfig
+            {
+                Url = options.Url
+            };
+
+            return new CachedSchemaRegistryClient(config);
+        });
+
+        services.AddSingleton<IKafkaSchemaSerializerFactory, KafkaSchemaSerializerFactory>();
+
+        services.AddSingleton<IKafkaSchemaDeserializerFactory, KafkaSchemaDeserializerFactory>();
+
+        services.AddSingleton<IAsyncSerializer<DeviceEvent>>(sp =>
+            sp.GetRequiredService<IKafkaSchemaSerializerFactory>()
+                .CreateSerializer<DeviceEvent>());
+
+        services.AddSingleton<IDeserializer<DeviceEvent>>(sp =>
+            sp.GetRequiredService<IKafkaSchemaDeserializerFactory>()
+                .CreateDeserializer<DeviceEvent>()
+                .AsSyncOverAsync());
 
         return services;
     }

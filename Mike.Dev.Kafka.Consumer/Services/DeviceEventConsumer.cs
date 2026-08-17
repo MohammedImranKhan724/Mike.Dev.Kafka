@@ -99,10 +99,6 @@ public sealed class DeviceEventConsumer
                 message.Partition,
                 message.Offset);
 
-            // Offset commit already happened inside the transactional
-            // producer via SendOffsetsToTransaction — do not also call
-            // _consumer.Commit() here, it would be redundant and unsafe
-            // if the transaction had in fact been aborted.
             return KafkaProcessingStatus.Success;
         }
         catch (OperationCanceledException)
@@ -150,8 +146,6 @@ public sealed class DeviceEventConsumer
             exception,
             cancellationToken);
 
-        // Publishing to the DLT stands in for successful processing of
-        // this message — commit past it so it is not redelivered forever.
         _consumer.Commit(message);
 
         return KafkaProcessingStatus.DeadLetter;
