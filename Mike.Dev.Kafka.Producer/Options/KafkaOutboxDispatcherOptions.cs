@@ -2,8 +2,7 @@ namespace Mike.Dev.Kafka.Producer.Options;
 
 public sealed class KafkaOutboxDispatcherOptions
 {
-    public const string Section =
-        "Kafka:Outbox";
+    public const string Section = "Kafka:Outbox";
 
     public int BatchSize { get; set; } = 100;
 

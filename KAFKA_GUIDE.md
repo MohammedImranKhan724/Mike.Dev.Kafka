@@ -1,6 +1,6 @@
 # Kafka + Event-Driven Systems
 
-### Grounded in `Mike.Dev.Kafka.sln` — for a 2–4 year level
+### Grounded in `Mike.Dev.Kafka.sln`
 
 This document covers two kinds of material:
 
@@ -364,6 +364,7 @@ catch { /* rollback */ throw; }
 **`KafkaOutboxDispatcher`** (Producer/Services/KafkaOutboxDispatcher.cs) — a `BackgroundService` polling loop:
 
 1. `RecoverStuckMessagesAsync` — resets rows stuck in `Publishing` past a lease window back to `Failed` (guards against a dispatcher instance crashing mid-publish).
+
 2. `ClaimPendingAsync` — atomically claims a batch:
    
    ```sql
@@ -375,6 +376,7 @@ catch { /* rollback */ throw; }
    LIMIT batchSize
    FOR UPDATE SKIP LOCKED
    ```
+
 3. Publishes each claimed row via the plain (non-transactional) `IKafkaProducer`, then marks it `Published`, or `Failed` with exponential backoff, or `DeadLettered` after `MaxRetryCount` is exhausted.
 
 ### Theory: `FOR UPDATE SKIP LOCKED`
